@@ -114,7 +114,7 @@ if "chat_history" not in st.session_state:
 
 
 # ==========================================================
-# AI STATUS
+# AI CONNECTION STATUS
 # ==========================================================
 
 ai_status = get_ai_status()
@@ -135,57 +135,9 @@ with st.sidebar:
 
     st.divider()
 
-
-    # ======================================================
-    # AI CONNECTION STATUS
-    # ======================================================
-
-    st.subheader("🤖 AI Connection")
-
-    st.info(
-        f"Mode: {ai_mode}"
-    )
-
-    st.write(
-        f"**Model:** {ai_status['model']}"
-    )
-
-    st.write(
-        f"**Status:** {ai_status['status']}"
-    )
-
-
-    # ======================================================
-    # GEMINI KEY STATUS
-    # ======================================================
-
-    try:
-
-        if "GEMINI_API_KEY" in st.secrets:
-
-            st.success(
-                "☁️ Gemini API key detected"
-            )
-
-        else:
-
-            st.warning(
-                "⚠️ Gemini API key not detected"
-            )
-
-    except Exception:
-
-        st.info(
-            "💻 Running in local mode"
-        )
-
-
-    st.divider()
-
-
-    # ======================================================
+    # ------------------------------------------------------
     # DATE AND TIME
-    # ======================================================
+    # ------------------------------------------------------
 
     current_time = datetime.now()
 
@@ -198,10 +150,37 @@ with st.sidebar:
 
     st.divider()
 
+    # ------------------------------------------------------
+    # AI CONNECTION
+    # ------------------------------------------------------
 
-    # ======================================================
+    st.subheader("☁️ AI Connection")
+
+    if ai_status["mode"] == "Gemini":
+
+        st.success(
+            "☁️ Gemini API configured"
+        )
+
+        st.caption(
+            f"Model: {ai_status['model']}"
+        )
+
+    else:
+
+        st.info(
+            "💻 Ollama Local AI"
+        )
+
+        st.caption(
+            f"Model: {ai_status['model']}"
+        )
+
+    st.divider()
+
+    # ------------------------------------------------------
     # NAVIGATION
-    # ======================================================
+    # ------------------------------------------------------
 
     page = st.radio(
         "Navigation",
@@ -224,10 +203,9 @@ with st.sidebar:
 
     st.divider()
 
-
-    # ======================================================
+    # ------------------------------------------------------
     # AI TECHNIQUES
-    # ======================================================
+    # ------------------------------------------------------
 
     st.subheader("🧠 AI Techniques")
 
@@ -240,13 +218,17 @@ with st.sidebar:
 
     st.divider()
 
-    st.caption(
-        "Local: Llama 3.2 + Ollama"
-    )
+    if ai_status["mode"] == "Gemini":
 
-    st.caption(
-        "Cloud: Google Gemini"
-    )
+        st.caption(
+            "☁️ Powered by Google Gemini AI"
+        )
+
+    else:
+
+        st.caption(
+            "💻 Powered by Llama 3.2 + Ollama"
+        )
 
 
 # ==========================================================
@@ -260,6 +242,22 @@ st.write(
     "for studying, summarization, quizzes and "
     "personalized learning."
 )
+
+# ----------------------------------------------------------
+# AI MODE DISPLAY
+# ----------------------------------------------------------
+
+if ai_status["mode"] == "Gemini":
+
+    st.success(
+        "☁️ Cloud AI Connected — Google Gemini"
+    )
+
+else:
+
+    st.info(
+        "💻 Local AI Mode — Ollama"
+    )
 
 st.divider()
 
@@ -281,6 +279,10 @@ if page == "🏠 Dashboard":
         []
     )
 
+    # ------------------------------------------------------
+    # LATEST SCORE
+    # ------------------------------------------------------
+
     if history:
 
         latest_score = history[-1].get(
@@ -292,9 +294,8 @@ if page == "🏠 Dashboard":
 
         latest_score = 0
 
-
     # ------------------------------------------------------
-    # METRICS
+    # DASHBOARD METRICS
     # ------------------------------------------------------
 
     col1, col2, col3, col4 = st.columns(4)
@@ -334,9 +335,7 @@ if page == "🏠 Dashboard":
             )
         )
 
-
     st.divider()
-
 
     # ------------------------------------------------------
     # QUICK START
@@ -367,9 +366,23 @@ if page == "🏠 Dashboard":
             "Generate quizzes from your notes."
         )
 
-
     st.divider()
 
+    # ------------------------------------------------------
+    # CURRENT DATE AND TIME
+    # ------------------------------------------------------
+
+    st.subheader("📅 Current Date & Time")
+
+    now = datetime.now()
+
+    st.write(
+        now.strftime(
+            "%A, %d %B %Y | %I:%M:%S %p"
+        )
+    )
+
+    st.divider()
 
     # ------------------------------------------------------
     # HOW IT WORKS
@@ -408,12 +421,13 @@ if page == "🏠 Dashboard":
 
 elif page == "📚 Study Material":
 
-    st.subheader("📚 Study Material")
+    st.subheader(
+        "📚 Study Material"
+    )
 
     st.write(
         "Upload your study material or enter it manually."
     )
-
 
     uploaded_file = st.file_uploader(
         "Upload Study Material",
@@ -423,7 +437,6 @@ elif page == "📚 Study Material":
             "docx"
         ]
     )
-
 
     if uploaded_file:
 
@@ -445,9 +458,7 @@ elif page == "📚 Study Material":
                 f"❌ Error reading file: {error}"
             )
 
-
     st.divider()
-
 
     notes = st.text_area(
         "✏️ Enter or edit your study material",
@@ -457,6 +468,9 @@ elif page == "📚 Study Material":
 
     st.session_state.notes = notes
 
+    # ------------------------------------------------------
+    # MATERIAL STATISTICS
+    # ------------------------------------------------------
 
     col1, col2, col3 = st.columns(3)
 
@@ -481,9 +495,7 @@ elif page == "📚 Study Material":
             len(notes.splitlines())
         )
 
-
     st.divider()
-
 
     if st.button(
         "🗑️ Clear Study Material"
@@ -508,10 +520,21 @@ elif page == "🤖 AI Chat":
         "🤖 AI Chat with Your Notes"
     )
 
+    if ai_status["mode"] == "Gemini":
+
+        st.success(
+            "☁️ Using Google Gemini Cloud AI"
+        )
+
+    else:
+
+        st.info(
+            "💻 Using Ollama Local AI"
+        )
+
     st.write(
         "Ask questions about your study material."
     )
-
 
     if not st.session_state.notes.strip():
 
@@ -523,9 +546,10 @@ elif page == "🤖 AI Chat":
 
         question = st.text_input(
             "💬 Ask your question",
-            placeholder="Example: Explain inheritance simply"
+            placeholder=(
+                "Example: Explain inheritance simply"
+            )
         )
-
 
         if st.button(
             "🤖 Ask AI",
@@ -549,7 +573,6 @@ elif page == "🤖 AI Chat":
                         st.session_state.notes
                     )
 
-
                 st.session_state.chat_history.append(
                     {
                         "question": question,
@@ -557,13 +580,49 @@ elif page == "🤖 AI Chat":
                     }
                 )
 
+                # --------------------------------------------------
+                # DISPLAY RESULT
+                # --------------------------------------------------
 
-                st.success(
-                    "🤖 AI Answer"
-                )
+                if isinstance(answer, str) and answer.startswith(
+                    "GEMINI_ERROR:"
+                ):
 
-                st.markdown(answer)
+                    st.error(
+                        "❌ Gemini API error."
+                    )
 
+                    st.code(
+                        answer.replace(
+                            "GEMINI_ERROR:",
+                            ""
+                        )
+                    )
+
+                elif isinstance(answer, str) and answer.startswith(
+                    "AI Error: Ollama"
+                ):
+
+                    st.error(
+                        "❌ Local Ollama AI could not be reached."
+                    )
+
+                    st.info(
+                        "If you are running the application locally, "
+                        "make sure Ollama is running."
+                    )
+
+                else:
+
+                    st.success(
+                        "🤖 AI Answer"
+                    )
+
+                    st.markdown(answer)
+
+    # ------------------------------------------------------
+    # CHAT HISTORY
+    # ------------------------------------------------------
 
     if st.session_state.chat_history:
 
@@ -585,6 +644,20 @@ elif page == "🤖 AI Chat":
                     chat["answer"]
                 )
 
+    st.divider()
+
+    if ai_status["mode"] == "Gemini":
+
+        st.caption(
+            "☁️ AI responses are generated using Google Gemini."
+        )
+
+    else:
+
+        st.caption(
+            "💻 AI responses are generated using Llama 3.2 through Ollama."
+        )
+
 
 # ==========================================================
 # CONCEPT EXPLAINER
@@ -597,15 +670,14 @@ elif page == "💡 Concept Explainer":
     )
 
     st.write(
-        "Ask AI to explain a difficult concept."
+        "Ask the AI to explain a difficult concept "
+        "at a level that matches your understanding."
     )
-
 
     topic = st.text_input(
         "📌 Enter a concept",
         placeholder="Example: Inheritance in Python"
     )
-
 
     difficulty = st.selectbox(
         "🎓 Explanation Level",
@@ -615,7 +687,6 @@ elif page == "💡 Concept Explainer":
             "Detailed - Advanced"
         ]
     )
-
 
     if st.button(
         "✨ Explain Concept",
@@ -640,7 +711,22 @@ elif page == "💡 Concept Explainer":
                     difficulty
                 )
 
-            st.markdown(result)
+            if isinstance(result, str) and result.startswith(
+                "GEMINI_ERROR:"
+            ):
+
+                st.error("❌ Gemini API error.")
+
+                st.code(
+                    result.replace(
+                        "GEMINI_ERROR:",
+                        ""
+                    )
+                )
+
+            else:
+
+                st.markdown(result)
 
 
 # ==========================================================
@@ -652,7 +738,6 @@ elif page == "📝 Smart Summary":
     st.subheader(
         "📝 Smart Summary"
     )
-
 
     if not st.session_state.notes.strip():
 
@@ -670,7 +755,6 @@ elif page == "📝 Smart Summary":
             ]
         )
 
-
         if st.button(
             "✨ Generate AI Summary",
             type="primary"
@@ -685,15 +769,32 @@ elif page == "📝 Smart Summary":
                     summary_type
                 )
 
-            st.markdown(summary)
+            if isinstance(summary, str) and summary.startswith(
+                "GEMINI_ERROR:"
+            ):
 
+                st.error("❌ Gemini API error.")
+
+                st.code(
+                    summary.replace(
+                        "GEMINI_ERROR:",
+                        ""
+                    )
+                )
+
+            else:
+
+                st.markdown(summary)
 
         st.divider()
+
+        # --------------------------------------------------
+        # TF-IDF SUMMARY
+        # --------------------------------------------------
 
         st.subheader(
             "🔬 NLP Extractive Summary"
         )
-
 
         number = st.slider(
             "Number of important sentences",
@@ -701,7 +802,6 @@ elif page == "📝 Smart Summary":
             10,
             5
         )
-
 
         if st.button(
             "🔍 Generate TF-IDF Summary"
@@ -711,7 +811,6 @@ elif page == "📝 Smart Summary":
                 st.session_state.notes,
                 number
             )
-
 
             if summary:
 
@@ -746,7 +845,6 @@ elif page == "❓ AI Quiz":
         "from your study material."
     )
 
-
     if not st.session_state.notes.strip():
 
         st.warning(
@@ -757,11 +855,10 @@ elif page == "❓ AI Quiz":
 
         number = st.slider(
             "Number of questions",
-            3,
-            10,
-            5
+            min_value=3,
+            max_value=10,
+            value=5
         )
-
 
         if st.button(
             "🎲 Generate AI Quiz",
@@ -777,7 +874,6 @@ elif page == "❓ AI Quiz":
                     number
                 )
 
-
             if quiz:
 
                 st.session_state.quiz = quiz
@@ -791,10 +887,25 @@ elif page == "❓ AI Quiz":
             else:
 
                 st.error(
-                    "❌ Quiz generation failed. "
-                    "Please check the AI connection."
+                    "❌ Quiz generation failed."
                 )
 
+                if ai_status["mode"] == "Gemini":
+
+                    st.info(
+                        "Please check your Gemini API key, "
+                        "API availability and internet connection."
+                    )
+
+                else:
+
+                    st.info(
+                        "Please make sure Ollama is running."
+                    )
+
+        # --------------------------------------------------
+        # DISPLAY QUIZ
+        # --------------------------------------------------
 
         if st.session_state.quiz:
 
@@ -805,7 +916,6 @@ elif page == "❓ AI Quiz":
             )
 
             answers = {}
-
 
             for index, question in enumerate(
                 st.session_state.quiz
@@ -819,16 +929,17 @@ elif page == "❓ AI Quiz":
                     question["question"]
                 )
 
-
                 answers[index] = st.radio(
                     "Choose your answer:",
                     question["options"],
                     key=f"quiz_answer_{index}"
                 )
 
-
                 st.divider()
 
+            # --------------------------------------------------
+            # SUBMIT QUIZ
+            # --------------------------------------------------
 
             if st.button(
                 "✅ Submit Quiz",
@@ -841,7 +952,6 @@ elif page == "❓ AI Quiz":
 
                 weak_topics = []
 
-
                 for index, question in enumerate(
                     st.session_state.quiz
                 ):
@@ -853,7 +963,6 @@ elif page == "❓ AI Quiz":
                         question["answer"]
                     )
 
-
                     if correct:
 
                         correct_count += 1
@@ -863,7 +972,6 @@ elif page == "❓ AI Quiz":
                         weak_topics.append(
                             question["concept"]
                         )
-
 
                     results.append(
                         {
@@ -887,20 +995,16 @@ elif page == "❓ AI Quiz":
                         }
                     )
 
-
                 st.session_state.quiz_results = results
-
 
                 total = len(
                     st.session_state.quiz
                 )
 
-
                 percentage = (
                     correct_count /
                     total
                 ) * 100
-
 
                 save_quiz_result(
                     correct_count,
@@ -910,13 +1014,11 @@ elif page == "❓ AI Quiz":
                     )
                 )
 
-
                 st.divider()
 
                 st.subheader(
                     "🏆 Quiz Result"
                 )
-
 
                 col1, col2, col3 = st.columns(3)
 
@@ -941,11 +1043,9 @@ elif page == "❓ AI Quiz":
                         f"{percentage:.1f}%"
                     )
 
-
                 st.progress(
                     percentage / 100
                 )
-
 
                 if percentage >= 80:
 
@@ -965,6 +1065,9 @@ elif page == "❓ AI Quiz":
                         "📚 More revision is recommended."
                     )
 
+                # --------------------------------------------------
+                # ANSWER REVIEW
+                # --------------------------------------------------
 
                 st.divider()
 
@@ -972,13 +1075,17 @@ elif page == "❓ AI Quiz":
                     "📋 Answer Review"
                 )
 
-
                 for result in results:
 
                     if result["correct"]:
 
                         st.success(
                             f"✅ {result['question']}"
+                        )
+
+                        st.write(
+                            f"Your answer: "
+                            f"**{result['selected']}**"
                         )
 
                     else:
@@ -997,11 +1104,13 @@ elif page == "❓ AI Quiz":
                             f"**{result['correct_answer']}**"
                         )
 
-
                     st.info(
                         f"💡 {result['explanation']}"
                     )
 
+                # --------------------------------------------------
+                # WEAK TOPICS
+                # --------------------------------------------------
 
                 if weak_topics:
 
@@ -1030,6 +1139,9 @@ elif page == "🗂️ Flashcards":
         "🗂️ AI Flashcards"
     )
 
+    st.write(
+        "Generate AI-powered flashcards for quick revision."
+    )
 
     if not st.session_state.notes.strip():
 
@@ -1041,11 +1153,10 @@ elif page == "🗂️ Flashcards":
 
         number = st.slider(
             "Number of flashcards",
-            3,
-            15,
-            5
+            min_value=3,
+            max_value=15,
+            value=5
         )
-
 
         if st.button(
             "🪄 Generate Flashcards",
@@ -1061,7 +1172,6 @@ elif page == "🗂️ Flashcards":
                     number
                 )
 
-
             if cards:
 
                 st.session_state.flashcards = cards
@@ -1073,10 +1183,14 @@ elif page == "🗂️ Flashcards":
             else:
 
                 st.error(
-                    "❌ Could not generate flashcards. "
-                    "Please check the AI connection."
+                    "❌ Could not generate flashcards."
                 )
 
+                if ai_status["mode"] == "Gemini":
+
+                    st.info(
+                        "Please check your Gemini API configuration."
+                    )
 
         if st.session_state.flashcards:
 
@@ -1086,14 +1200,14 @@ elif page == "🗂️ Flashcards":
                 "📚 Revision Cards"
             )
 
-
             for index, card in enumerate(
                 st.session_state.flashcards,
                 1
             ):
 
                 with st.expander(
-                    f"📌 Card {index}: {card['question']}"
+                    f"📌 Card {index}: "
+                    f"{card['question']}"
                 ):
 
                     st.markdown(
@@ -1115,12 +1229,15 @@ elif page == "🗂️ Flashcards":
                     )
 
                     st.caption(
-                        f"🧠 Concept: {card['concept']}"
+                        f"🧠 Concept: "
+                        f"{card['concept']}"
                     )
 
+            # --------------------------------------------------
+            # DOWNLOAD
+            # --------------------------------------------------
 
             flashcard_text = ""
-
 
             for index, card in enumerate(
                 st.session_state.flashcards,
@@ -1134,7 +1251,6 @@ elif page == "🗂️ Flashcards":
                     f"Concept: {card['concept']}\n"
                     f"{'-' * 60}\n\n"
                 )
-
 
             st.download_button(
                 "⬇️ Download Flashcards",
@@ -1154,6 +1270,10 @@ elif page == "🎯 Weak Concepts":
         "🎯 AI Weak Concept Detector"
     )
 
+    st.write(
+        "This section identifies concepts where "
+        "you repeatedly make mistakes."
+    )
 
     data = load_data()
 
@@ -1161,7 +1281,6 @@ elif page == "🎯 Weak Concepts":
         "quiz_history",
         []
     )
-
 
     if not history:
 
@@ -1174,7 +1293,6 @@ elif page == "🎯 Weak Concepts":
 
         concept_stats = {}
 
-
         for attempt in history:
 
             for topic in attempt.get(
@@ -1182,10 +1300,11 @@ elif page == "🎯 Weak Concepts":
                 []
             ):
 
-                concept_stats[topic] = (
-                    concept_stats.get(topic, 0) + 1
-                )
+                if topic not in concept_stats:
 
+                    concept_stats[topic] = 0
+
+                concept_stats[topic] += 1
 
         if not concept_stats:
 
@@ -1201,7 +1320,6 @@ elif page == "🎯 Weak Concepts":
                 reverse=True
             )
 
-
             for topic, mistakes in sorted_topics:
 
                 if mistakes >= 3:
@@ -1216,11 +1334,9 @@ elif page == "🎯 Weak Concepts":
 
                     status = "🟡 Review"
 
-
                 col1, col2, col3 = st.columns(
                     [4, 2, 1]
                 )
-
 
                 with col1:
 
@@ -1241,17 +1357,22 @@ elif page == "🎯 Weak Concepts":
                         mistakes
                     )
 
-
             st.divider()
 
-
             most_weak = sorted_topics[0]
-
 
             st.warning(
                 f"🎯 **Top Priority:** {most_weak[0]}"
             )
 
+            st.info(
+                "### Recommended Action\n\n"
+                "1. 📖 Review the concept\n\n"
+                "2. 🧠 Ask AI for a simple explanation\n\n"
+                "3. 🗂️ Create flashcards\n\n"
+                "4. ❓ Retake the quiz\n\n"
+                "5. 📈 Check your progress"
+            )
 
             if st.button(
                 "🤖 Generate AI Recommendation"
@@ -1263,7 +1384,6 @@ elif page == "🎯 Weak Concepts":
                     in sorted_topics
                 ]
 
-
                 with st.spinner(
                     "🧠 AI is analyzing your weak areas..."
                 ):
@@ -1274,7 +1394,6 @@ elif page == "🎯 Weak Concepts":
                             0
                         )
                     )
-
 
                 st.markdown(
                     recommendation
@@ -1291,7 +1410,6 @@ elif page == "🧠 Study Plan":
         "🧠 AI Personalized Study Plan"
     )
 
-
     data = load_data()
 
     history = data.get(
@@ -1299,9 +1417,7 @@ elif page == "🧠 Study Plan":
         []
     )
 
-
     weak_topics = []
-
 
     for attempt in history:
 
@@ -1312,13 +1428,11 @@ elif page == "🧠 Study Plan":
             )
         )
 
-
     weak_topics = list(
         dict.fromkeys(
             weak_topics
         )
     )
-
 
     if weak_topics:
 
@@ -1335,17 +1449,16 @@ elif page == "🧠 Study Plan":
     else:
 
         st.info(
-            "No weak topics detected yet."
+            "No weak topics detected yet. "
+            "The plan will focus on general revision."
         )
-
 
     study_hours = st.slider(
         "⏰ Study hours per day",
-        1,
-        8,
-        2
+        min_value=1,
+        max_value=8,
+        value=2
     )
-
 
     if st.button(
         "🧠 Generate Study Plan",
@@ -1361,9 +1474,9 @@ elif page == "🧠 Study Plan":
                 study_hours
             )
 
-
         st.markdown(plan)
 
+        st.divider()
 
         if weak_topics:
 
@@ -1375,7 +1488,6 @@ elif page == "🧠 Study Plan":
                     weak_topics,
                     study_hours
                 )
-
 
             st.subheader(
                 "🤖 AI Learning Recommendation"
@@ -1396,7 +1508,6 @@ elif page == "📈 Progress":
         "📈 Learning Progress"
     )
 
-
     stats = get_progress_statistics()
 
     data = load_data()
@@ -1406,9 +1517,7 @@ elif page == "📈 Progress":
         []
     )
 
-
     col1, col2, col3, col4 = st.columns(4)
-
 
     with col1:
 
@@ -1417,14 +1526,12 @@ elif page == "📈 Progress":
             f"{stats['latest_score']}%"
         )
 
-
     with col2:
 
         st.metric(
             "📊 Average Score",
             f"{stats['average_score']}%"
         )
-
 
     with col3:
 
@@ -1433,7 +1540,6 @@ elif page == "📈 Progress":
             f"{stats['best_score']}%"
         )
 
-
     with col4:
 
         st.metric(
@@ -1441,12 +1547,9 @@ elif page == "📈 Progress":
             f"{stats['streak']} days"
         )
 
-
     st.divider()
 
-
     col1, col2 = st.columns(2)
-
 
     with col1:
 
@@ -1454,7 +1557,6 @@ elif page == "📈 Progress":
             "📝 Quiz Attempts",
             stats["quiz_attempts"]
         )
-
 
     with col2:
 
@@ -1464,12 +1566,32 @@ elif page == "📈 Progress":
 
         minutes = total_minutes % 60
 
-
         st.metric(
             "⏱️ Study Time",
             f"{hours}h {minutes}m"
         )
 
+    st.divider()
+
+    if stats["improvement"] > 0:
+
+        st.success(
+            f"📈 Your latest score improved by "
+            f"{stats['improvement']} percentage points."
+        )
+
+    elif stats["improvement"] < 0:
+
+        st.warning(
+            f"📉 Your latest score decreased by "
+            f"{abs(stats['improvement'])} percentage points."
+        )
+
+    else:
+
+        st.info(
+            "📊 Take another quiz to measure improvement."
+        )
 
     if history:
 
@@ -1479,7 +1601,6 @@ elif page == "📈 Progress":
             "📊 Quiz Score History"
         )
 
-
         scores = [
             item.get(
                 "percentage",
@@ -1487,7 +1608,6 @@ elif page == "📈 Progress":
             )
             for item in history
         ]
-
 
         chart_df = pd.DataFrame(
             {
@@ -1502,12 +1622,72 @@ elif page == "📈 Progress":
             }
         )
 
-
         st.line_chart(
             chart_df.set_index(
                 "Quiz Attempt"
             )
         )
+
+        st.divider()
+
+        st.subheader(
+            "📋 Detailed Quiz History"
+        )
+
+        for index, item in enumerate(
+            reversed(history),
+            1
+        ):
+
+            attempt_number = (
+                len(history) - index + 1
+            )
+
+            percentage = item.get(
+                "percentage",
+                0
+            )
+
+            with st.expander(
+                f"Quiz Attempt "
+                f"{attempt_number} "
+                f"— {percentage}%"
+            ):
+
+                st.write(
+                    f"📅 Date: "
+                    f"{item.get('date', 'Unknown')}"
+                )
+
+                st.write(
+                    f"Correct: "
+                    f"{item.get('correct', 0)} / "
+                    f"{item.get('total', 0)}"
+                )
+
+                st.progress(
+                    min(
+                        percentage / 100,
+                        1.0
+                    )
+                )
+
+                weak = item.get(
+                    "weak_topics",
+                    []
+                )
+
+                if weak:
+
+                    st.write(
+                        "🎯 Weak Topics:"
+                    )
+
+                    for topic in weak:
+
+                        st.write(
+                            f"• {topic}"
+                        )
 
 
 # ==========================================================
@@ -1520,6 +1700,9 @@ elif page == "⏱️ Study Timer":
         "⏱️ Study Session Timer"
     )
 
+    st.write(
+        "Record the amount of time you spend studying."
+    )
 
     minutes = st.number_input(
         "⏱️ Study session duration (minutes)",
@@ -1528,6 +1711,9 @@ elif page == "⏱️ Study Timer":
         value=25
     )
 
+    st.info(
+        f"Recommended session: {minutes} minutes"
+    )
 
     if st.button(
         "✅ Record Study Session",
@@ -1553,12 +1739,10 @@ elif page == "📌 Bookmarks":
         "📌 Bookmarked Topics"
     )
 
-
     topic = st.text_input(
         "📌 Topic to bookmark",
         placeholder="Example: Python Inheritance"
     )
-
 
     if st.button(
         "📌 Add Bookmark"
@@ -1582,7 +1766,6 @@ elif page == "📌 Bookmarks":
                 "Please enter a topic."
             )
 
-
     data = load_data()
 
     bookmarks = data.get(
@@ -1590,8 +1773,9 @@ elif page == "📌 Bookmarks":
         []
     )
 
-
     if bookmarks:
+
+        st.divider()
 
         for index, bookmark in enumerate(
             bookmarks
@@ -1601,13 +1785,11 @@ elif page == "📌 Bookmarks":
                 [5, 1]
             )
 
-
             with col1:
 
                 st.write(
                     f"📌 **{bookmark}**"
                 )
-
 
             with col2:
 
@@ -1639,7 +1821,6 @@ elif page == "📄 Study Report":
         "📄 AI Study Report"
     )
 
-
     data = load_data()
 
     history = data.get(
@@ -1659,6 +1840,9 @@ elif page == "📄 Study Report":
 
     stats = get_progress_statistics()
 
+    # ------------------------------------------------------
+    # LATEST RESULT
+    # ------------------------------------------------------
 
     if history:
 
@@ -1680,14 +1864,15 @@ elif page == "📄 Study Report":
 
         weak_topics = []
 
+    # ------------------------------------------------------
+    # REPORT PREVIEW
+    # ------------------------------------------------------
 
     st.subheader(
         "📊 Report Preview"
     )
 
-
     col1, col2, col3, col4 = st.columns(4)
-
 
     with col1:
 
@@ -1696,14 +1881,12 @@ elif page == "📄 Study Report":
             f"{score}%"
         )
 
-
     with col2:
 
         st.metric(
             "📊 Average Score",
             f"{stats['average_score']}%"
         )
-
 
     with col3:
 
@@ -1712,7 +1895,6 @@ elif page == "📄 Study Report":
             f"{stats['best_score']}%"
         )
 
-
     with col4:
 
         st.metric(
@@ -1720,6 +1902,11 @@ elif page == "📄 Study Report":
             stats["quiz_attempts"]
         )
 
+    st.divider()
+
+    # ------------------------------------------------------
+    # STUDY TIME
+    # ------------------------------------------------------
 
     total_minutes = stats[
         "total_minutes"
@@ -1729,17 +1916,18 @@ elif page == "📄 Study Report":
 
     minutes = total_minutes % 60
 
-
     st.info(
         f"⏱️ Total Study Time: "
         f"**{hours} hours {minutes} minutes**"
     )
 
+    # ------------------------------------------------------
+    # WEAK CONCEPTS
+    # ------------------------------------------------------
 
     st.subheader(
         "🎯 Weak Concepts"
     )
-
 
     if weak_topics:
 
@@ -1755,14 +1943,15 @@ elif page == "📄 Study Report":
             "🎉 No weak concepts recorded."
         )
 
-
     st.divider()
 
+    # ------------------------------------------------------
+    # BOOKMARKS
+    # ------------------------------------------------------
 
     st.subheader(
         "📌 Bookmarked Topics"
     )
-
 
     if bookmarks:
 
@@ -1778,9 +1967,15 @@ elif page == "📄 Study Report":
             "No bookmarks available."
         )
 
-
     st.divider()
 
+    # ------------------------------------------------------
+    # REPORT SUMMARY
+    # ------------------------------------------------------
+
+    st.subheader(
+        "✏️ Report Summary"
+    )
 
     report_summary = st.text_area(
         "Enter additional comments",
@@ -1791,6 +1986,9 @@ elif page == "📄 Study Report":
         height=150
     )
 
+    # ------------------------------------------------------
+    # GENERATE PDF
+    # ------------------------------------------------------
 
     if st.button(
         "📄 Generate PDF Report",
@@ -1811,7 +2009,6 @@ elif page == "📄 Study Report":
                 study_sessions
             )
 
-
         try:
 
             with open(
@@ -1821,7 +2018,6 @@ elif page == "📄 Study Report":
 
                 pdf_data = file.read()
 
-
             st.download_button(
                 "⬇️ Download Study Report",
                 pdf_data,
@@ -1829,11 +2025,9 @@ elif page == "📄 Study Report":
                 mime="application/pdf"
             )
 
-
             st.success(
                 "✅ Your study report is ready!"
             )
-
 
         except Exception as error:
 
@@ -1848,9 +2042,18 @@ elif page == "📄 Study Report":
 
 st.divider()
 
-st.caption(
-    "🎓 AI Study Buddy | "
-    "Python + Streamlit + NLP + "
-    "Machine Learning + "
-    "Gemini AI + Ollama"
-)
+if ai_status["mode"] == "Gemini":
+
+    st.caption(
+        "🎓 AI Study Buddy | "
+        "Python + Streamlit + NLP + "
+        "Machine Learning + Google Gemini"
+    )
+
+else:
+
+    st.caption(
+        "🎓 AI Study Buddy | "
+        "Python + Streamlit + NLP + "
+        "Machine Learning + Llama 3.2 + Ollama"
+    )

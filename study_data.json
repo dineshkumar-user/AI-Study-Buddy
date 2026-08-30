@@ -1,0 +1,66 @@
+{
+    "quiz_history": [
+        {
+            "date": "29 August 2026 10:46 PM",
+            "correct": 2,
+            "total": 5,
+            "percentage": 40.0,
+            "weak_topics": [
+                "Introduction to Python",
+                "Data Types",
+                "Input/Output Functions"
+            ]
+        },
+        {
+            "date": "30 August 2026 10:04 AM",
+            "correct": 2,
+            "total": 4,
+            "percentage": 50.0,
+            "weak_topics": [
+                "Introduction to Python",
+                "Installation of Python"
+            ]
+        },
+        {
+            "date": "30 August 2026 10:39 AM",
+            "correct": 5,
+            "total": 5,
+            "percentage": 100.0,
+            "weak_topics": []
+        },
+        {
+            "date": "30 August 2026 11:16 AM",
+            "correct": 1,
+            "total": 6,
+            "percentage": 16.7,
+            "weak_topics": [
+                "Python Keywords",
+                "Input/Output Functions",
+                "Introduction to Python",
+                "Data Types in Python",
+                "Python Indentation"
+            ]
+        }
+    ],
+    "bookmarks": [
+        "python data types"
+    ],
+    "study_sessions": [
+        {
+            "date": "29 August 2026 10:49 PM",
+            "minutes": 25
+        },
+        {
+            "date": "30 August 2026 10:09 AM",
+            "minutes": 25
+        },
+        {
+            "date": "30 August 2026 10:09 AM",
+            "minutes": 25
+        },
+        {
+            "date": "30 August 2026 10:48 AM",
+            "minutes": 30
+        }
+    ]
+}

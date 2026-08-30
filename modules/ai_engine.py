@@ -1,31 +1,130 @@
-import requests
+# ==========================================================
+# AI ENGINE
+# AI Study Buddy
+#
+# LOCAL:
+#     Ollama + Llama 3.2
+#
+# CLOUD:
+#     Google Gemini API
+#
+# ==========================================================
+
+import os
 import json
 import re
 
 
-# ============================================================
-# OLLAMA CONFIGURATION
-# ============================================================
+# ==========================================================
+# OPTIONAL GEMINI IMPORT
+# ==========================================================
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3.2:3b"
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 
-# ============================================================
-# BASIC OLLAMA FUNCTION
-# ============================================================
+# ==========================================================
+# CONFIGURATION
+# ==========================================================
+
+OLLAMA_MODEL = "llama3.2:3b"
+
+GEMINI_MODEL = "gemini-2.5-flash"
+
+
+# ==========================================================
+# GET GEMINI API KEY
+# ==========================================================
+
+def get_gemini_key():
+
+    # Check environment variable first
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if api_key:
+        return api_key
+
+    # Check Streamlit Cloud Secrets
+    try:
+
+        import streamlit as st
+
+        if "GEMINI_API_KEY" in st.secrets:
+
+            return st.secrets["GEMINI_API_KEY"]
+
+    except Exception:
+
+        pass
+
+    return None
+
+
+# ==========================================================
+# CHECK GEMINI AVAILABILITY
+# ==========================================================
+
+def gemini_available():
+
+    api_key = get_gemini_key()
+
+    if api_key and genai is not None:
+
+        return True
+
+    return False
+
+
+# ==========================================================
+# CREATE GEMINI CLIENT
+# ==========================================================
+
+def get_gemini_client():
+
+    api_key = get_gemini_key()
+
+    if not api_key:
+
+        return None
+
+    if genai is None:
+
+        return None
+
+    try:
+
+        client = genai.Client(
+            api_key=api_key
+        )
+
+        return client
+
+    except Exception:
+
+        return None
+
+
+# ==========================================================
+# OLLAMA AI
+# ==========================================================
 
 def ask_ollama(prompt):
 
     try:
 
+        import requests
+
         response = requests.post(
-            OLLAMA_URL,
+            "http://localhost:11434/api/generate",
+
             json={
-                "model": MODEL_NAME,
+                "model": OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False
             },
+
             timeout=180
         )
 
@@ -33,166 +132,103 @@ def ask_ollama(prompt):
 
         data = response.json()
 
-        return data.get("response", "").strip()
-
-    except requests.exceptions.ConnectionError:
-
-        return (
-            "ERROR: Ollama is not running. "
-            "Please start Ollama and try again."
-        )
+        return data.get(
+            "response",
+            ""
+        ).strip()
 
     except Exception as error:
 
-        return f"ERROR: {error}"
+        return (
+            "AI Error: Ollama could not be reached.\n\n"
+            f"{error}"
+        )
 
 
-# ============================================================
-# CONCEPT EXPLAINER
-# ============================================================
+# ==========================================================
+# GEMINI AI
+# ==========================================================
 
-def explain_concept(
-    topic,
-    notes="",
-    difficulty="Simple - Beginner"
-):
+def ask_gemini(prompt):
 
-    if notes:
+    client = get_gemini_client()
 
-        context = notes[:8000]
+    if client is None:
 
-    else:
+        return None
 
-        context = "No study notes provided."
+    try:
 
-    prompt = f"""
-You are an AI Study Buddy.
+        response = client.models.generate_content(
 
-Explain the following concept to a student.
+            model=GEMINI_MODEL,
 
-CONCEPT:
-{topic}
+            contents=prompt
+        )
 
-STUDY MATERIAL:
-{context}
+        if response and response.text:
 
-EXPLANATION LEVEL:
-{difficulty}
+            return response.text.strip()
 
-Give the answer using this structure:
+        return None
 
-## 📌 Simple Definition
+    except Exception as error:
 
-## 🧠 Explanation
-
-## 💡 Example
-
-## 🔑 Key Points
-
-Keep the explanation educational and easy to understand.
-"""
-
-    return ask_ollama(prompt)
+        return (
+            "GEMINI_ERROR:"
+            f"{error}"
+        )
 
 
-# ============================================================
-# CHAT WITH NOTES
-# ============================================================
+# ==========================================================
+# UNIVERSAL AI FUNCTION
+# ==========================================================
 
-def chat_with_notes(
-    question,
-    notes
-):
+def ask_ai(prompt):
 
-    prompt = f"""
-You are an AI Study Buddy.
+    """
+    Uses Gemini when GEMINI_API_KEY is available.
 
-Answer the student's question using the study material below.
+    Otherwise uses local Ollama.
+    """
 
-STUDY MATERIAL:
-{notes[:12000]}
+    # ------------------------------------------------------
+    # CLOUD MODE
+    # ------------------------------------------------------
 
-QUESTION:
-{question}
+    if gemini_available():
 
-Instructions:
+        response = ask_gemini(prompt)
 
-1. Give a clear answer.
-2. Explain difficult terms simply.
-3. Use examples when useful.
-4. If the answer is not present in the notes, say so.
-5. Do not invent information from the notes.
+        if response:
 
-Answer:
-"""
+            if not response.startswith(
+                "GEMINI_ERROR:"
+            ):
+
+                return response
+
+    # ------------------------------------------------------
+    # LOCAL MODE
+    # ------------------------------------------------------
 
     return ask_ollama(prompt)
 
 
-# ============================================================
-# AI SUMMARY
-# ============================================================
-
-def ai_summarize(
-    notes,
-    summary_type="Bullet Points"
-):
-
-    if summary_type == "Bullet Points":
-
-        instruction = """
-Create a concise bullet-point summary.
-Highlight the most important concepts, definitions,
-examples and key facts.
-"""
-
-    else:
-
-        instruction = """
-Create a concise paragraph summary.
-Include the most important concepts and facts.
-"""
-
-    prompt = f"""
-You are an AI Study Buddy.
-
-Summarize the following study material.
-
-STUDY MATERIAL:
-{notes[:12000]}
-
-{instruction}
-
-Do not add information that is not present in the study material.
-"""
-
-    return ask_ollama(prompt)
-
-
-# ============================================================
-# COMPATIBILITY ALIAS
-# ============================================================
-
-def generate_ai_summary(
-    notes,
-    summary_type="Bullet Points"
-):
-
-    return ai_summarize(
-        notes,
-        summary_type
-    )
-
-
-# ============================================================
+# ==========================================================
 # CLEAN JSON RESPONSE
-# ============================================================
+# ==========================================================
 
-def extract_json(text):
+def clean_json_response(text):
+
+    if not text:
+
+        return None
 
     text = text.strip()
 
-    # Remove markdown code fences
+    # Remove markdown JSON blocks
+
     text = re.sub(
         r"```json",
         "",
@@ -208,60 +244,252 @@ def extract_json(text):
 
     text = text.strip()
 
-    # Find JSON array
+    # ------------------------------------------------------
+    # FIND JSON ARRAY
+    # ------------------------------------------------------
+
     start = text.find("[")
 
     end = text.rfind("]")
 
-    if start != -1 and end != -1:
+    if (
+        start != -1
+        and end != -1
+        and end > start
+    ):
 
-        text = text[start:end + 1]
+        text = text[
+            start:
+            end + 1
+        ]
+
+    else:
+
+        # --------------------------------------------------
+        # FIND JSON OBJECT
+        # --------------------------------------------------
+
+        start = text.find("{")
+
+        end = text.rfind("}")
+
+        if (
+            start != -1
+            and end != -1
+            and end > start
+        ):
+
+            text = text[
+                start:
+                end + 1
+            ]
 
     try:
 
         return json.loads(text)
 
-    except json.JSONDecodeError:
+    except Exception:
 
         return None
 
 
-# ============================================================
+# ==========================================================
+# CONCEPT EXPLAINER
+# ==========================================================
+
+def explain_concept(
+    topic,
+    notes="",
+    difficulty="Simple - Beginner"
+):
+
+    prompt = f"""
+You are an AI Study Buddy.
+
+Explain the following concept to a student.
+
+CONCEPT:
+{topic}
+
+STUDY MATERIAL:
+{notes[:12000]}
+
+EXPLANATION LEVEL:
+{difficulty}
+
+Instructions:
+
+1. Explain clearly.
+2. Use simple language.
+3. Give a practical example.
+4. Give an analogy when useful.
+5. Mention important points.
+6. Prioritize information from the study material.
+7. Do not add unrelated information.
+
+Format:
+
+## 📚 Explanation
+
+## 💡 Example
+
+## 🧠 Important Points
+
+## 🎯 Quick Memory Tip
+"""
+
+    return ask_ai(prompt)
+
+
+# ==========================================================
+# CHAT WITH NOTES
+# ==========================================================
+
+def chat_with_notes(
+    question,
+    notes
+):
+
+    prompt = f"""
+You are an AI Study Buddy.
+
+Answer the student's question using the study
+material provided below.
+
+STUDY MATERIAL:
+{notes[:16000]}
+
+STUDENT QUESTION:
+{question}
+
+Instructions:
+
+- Answer clearly.
+- Use simple language.
+- Stay relevant to the study material.
+- Give an example when useful.
+- If the answer is not present in the notes,
+  clearly say that it is not available in the
+  provided study material.
+"""
+
+    return ask_ai(prompt)
+
+
+# ==========================================================
+# AI SUMMARY
+# ==========================================================
+
+def generate_ai_summary(
+    notes,
+    summary_type="Bullet Points"
+):
+
+    if not notes.strip():
+
+        return "Please provide study material first."
+
+    if summary_type == "Bullet Points":
+
+        format_instruction = """
+Create a bullet-point summary.
+
+Include:
+
+• Main concepts
+• Important definitions
+• Key facts
+• Important examples
+"""
+
+    else:
+
+        format_instruction = """
+Create a clear paragraph summary.
+
+Keep it concise while including the
+important concepts.
+"""
+
+    prompt = f"""
+You are an AI Study Buddy.
+
+Summarize the following study material.
+
+STUDY MATERIAL:
+{notes[:20000]}
+
+{format_instruction}
+
+Do not add information that is not supported
+by the study material.
+"""
+
+    return ask_ai(prompt)
+
+
+# ==========================================================
+# BACKWARD COMPATIBILITY
+# ==========================================================
+
+def ai_summarize(
+    notes,
+    summary_type="Bullet Points"
+):
+
+    return generate_ai_summary(
+        notes,
+        summary_type
+    )
+
+
+# ==========================================================
 # AI QUIZ GENERATOR
-# ============================================================
+# ==========================================================
 
 def generate_quiz(
     notes,
     number=5
 ):
 
+    if not notes.strip():
+
+        return []
+
+    number = max(
+        3,
+        min(number, 10)
+    )
+
     prompt = f"""
 You are an AI quiz generator.
 
-Create exactly {number} multiple-choice questions
-from the study material below.
+Create exactly {number} multiple-choice
+questions from the study material below.
 
 STUDY MATERIAL:
-{notes[:12000]}
+{notes[:20000]}
 
 IMPORTANT:
 Return ONLY valid JSON.
 
-Do not use markdown.
-Do not write explanations before or after the JSON.
+Do NOT use markdown.
 
-The JSON must have exactly this structure:
+Do NOT write anything before or after
+the JSON.
+
+Return exactly this structure:
 
 [
   {{
     "question": "Question text",
     "options": [
-      "A. option",
-      "B. option",
-      "C. option",
-      "D. option"
+      "Option A",
+      "Option B",
+      "Option C",
+      "Option D"
     ],
-    "answer": "A. option",
+    "answer": "Correct option text",
     "concept": "Main concept",
     "explanation": "Short explanation"
   }}
@@ -270,32 +498,40 @@ The JSON must have exactly this structure:
 Rules:
 
 1. Exactly {number} questions.
-2. Every question must have exactly 4 options.
-3. The answer MUST exactly match one of the options.
-4. Questions must be based only on the study material.
-5. Make questions educational.
+2. Exactly four options per question.
+3. Only one correct answer.
+4. The answer must exactly match
+   one of the options.
+5. Questions must be based on the
+   study material.
 6. Avoid duplicate questions.
-7. Include a useful concept name.
-8. Include a short explanation.
+7. Make questions educational.
+8. Do not include labels such as
+   "A.", "B.", "C.", "D." outside
+   the option text.
 """
 
-    raw_response = ask_ollama(prompt)
+    response = ask_ai(prompt)
 
-    if raw_response.startswith("ERROR:"):
+    quiz = clean_json_response(
+        response
+    )
+
+    if not isinstance(
+        quiz,
+        list
+    ):
 
         return []
 
-    quiz = extract_json(raw_response)
-
-    if not isinstance(quiz, list):
-
-        return []
-
-    valid_quiz = []
+    valid_questions = []
 
     for item in quiz:
 
-        if not isinstance(item, dict):
+        if not isinstance(
+            item,
+            dict
+        ):
 
             continue
 
@@ -324,91 +560,151 @@ Rules:
             ""
         )
 
-        if (
-            question
-            and isinstance(options, list)
-            and len(options) == 4
-            and answer in options
+        # --------------------------------------------------
+        # VALIDATE QUESTION
+        # --------------------------------------------------
+
+        if not question:
+
+            continue
+
+        if not isinstance(
+            options,
+            list
         ):
 
-            valid_quiz.append({
-                "question": question,
-                "options": options,
-                "answer": answer,
-                "concept": concept,
-                "explanation": explanation
-            })
+            continue
 
-    return valid_quiz[:number]
+        if len(options) != 4:
+
+            continue
+
+        if not answer:
+
+            continue
+
+        # --------------------------------------------------
+        # MATCH ANSWER WITH OPTION
+        # --------------------------------------------------
+
+        if answer not in options:
+
+            matched_answer = None
+
+            for option in options:
+
+                clean_option = re.sub(
+                    r"^[A-Da-d][\.\)\:\-]\s*",
+                    "",
+                    str(option)
+                ).strip()
+
+                clean_answer = re.sub(
+                    r"^[A-Da-d][\.\)\:\-]\s*",
+                    "",
+                    str(answer)
+                ).strip()
+
+                if (
+                    clean_option.lower()
+                    ==
+                    clean_answer.lower()
+                ):
+
+                    matched_answer = option
+
+                    break
+
+            if matched_answer:
+
+                answer = matched_answer
+
+            else:
+
+                continue
+
+        valid_questions.append({
+
+            "question": question,
+
+            "options": options,
+
+            "answer": answer,
+
+            "concept": concept,
+
+            "explanation": explanation
+        })
+
+    return valid_questions[:number]
 
 
-# ============================================================
-# COMPATIBILITY FUNCTION
-# ============================================================
-
-def generate_ai_quiz(
-    notes,
-    number=5
-):
-
-    return generate_quiz(
-        notes,
-        number
-    )
-
-
-# ============================================================
+# ==========================================================
 # AI FLASHCARD GENERATOR
-# ============================================================
+# ==========================================================
 
 def generate_flashcards(
     notes,
     number=5
 ):
 
+    if not notes.strip():
+
+        return []
+
+    number = max(
+        3,
+        min(number, 15)
+    )
+
     prompt = f"""
 You are an AI flashcard generator.
 
-Create exactly {number} useful study flashcards
-from the following study material.
+Create exactly {number} flashcards from
+the study material.
 
 STUDY MATERIAL:
-{notes[:12000]}
+{notes[:20000]}
 
+IMPORTANT:
 Return ONLY valid JSON.
 
-Do not use markdown.
-Do not write anything outside the JSON.
+Do NOT use markdown.
 
-Required format:
+Do NOT write anything before or after
+the JSON.
+
+Return exactly:
 
 [
   {{
-    "question": "What is ...?",
-    "answer": "Clear answer",
-    "concept": "Main concept"
+    "question": "Question",
+    "answer": "Answer",
+    "concept": "Concept"
   }}
 ]
 
 Rules:
 
-1. Exactly {number} flashcards.
+1. Exactly {number} cards.
 2. Questions must be useful for revision.
-3. Answers must be concise but informative.
-4. Questions must be based only on the study material.
-5. Avoid duplicate flashcards.
-6. Include a concept for every card.
+3. Answers must be concise and accurate.
+4. Cover different concepts.
+5. Do not duplicate questions.
+6. Use only information supported
+   by the study material.
 """
 
-    raw_response = ask_ollama(prompt)
+    response = ask_ai(prompt)
 
-    if raw_response.startswith("ERROR:"):
+    cards = clean_json_response(
+        response
+    )
 
-        return []
-
-    cards = extract_json(raw_response)
-
-    if not isinstance(cards, list):
+    if not isinstance(
+        cards,
+        list
+    ):
 
         return []
 
@@ -416,7 +712,10 @@ Rules:
 
     for card in cards:
 
-        if not isinstance(card, dict):
+        if not isinstance(
+            card,
+            dict
+        ):
 
             continue
 
@@ -438,111 +737,149 @@ Rules:
         if question and answer:
 
             valid_cards.append({
+
                 "question": question,
+
                 "answer": answer,
+
                 "concept": concept
             })
 
     return valid_cards[:number]
 
 
-# ============================================================
-# AI STUDY PLAN
-# ============================================================
+# ==========================================================
+# STUDY PLAN
+# ==========================================================
 
 def generate_study_plan(
     weak_topics,
-    study_time
+    study_hours=2
 ):
 
+    if not weak_topics:
+
+        weak_topics = [
+            "General revision"
+        ]
+
+    topics_text = "\n".join(
+
+        f"- {topic}"
+
+        for topic in weak_topics
+    )
+
     prompt = f"""
-You are an AI Study Planner.
+You are an AI personal study planner.
 
 Create a personalized study plan.
 
 WEAK TOPICS:
-{weak_topics}
+{topics_text}
 
 AVAILABLE STUDY TIME:
-{study_time}
+{study_hours} hours per day
 
-Create:
-
-## 📅 Study Plan
-
-## 🎯 Priority Topics
-
-## ⏰ Time Allocation
-
-## 📝 Recommended Activities
-
-## 🔄 Revision Strategy
-
-Keep the plan practical for a student.
-"""
-
-    return ask_ollama(prompt)
-
-
-# ============================================================
-# COMPATIBILITY FUNCTION
-# ============================================================
-
-def create_study_plan(
-    weak_topics,
-    study_time
-):
-
-    return generate_study_plan(
-        weak_topics,
-        study_time
-    )
-
-
-# ============================================================
-# LEARNING RECOMMENDATION
-# ============================================================
-
-def generate_learning_recommendation(
-    score,
-    weak_topics
-):
-
-    prompt = f"""
-You are an AI learning coach.
-
-Student quiz score:
-{score}%
-
-Weak topics:
-{weak_topics}
-
-Give personalized recommendations.
+Create a practical plan.
 
 Include:
 
-1. Performance analysis
-2. Topics to revise
-3. Recommended study activities
-4. Suggested next quiz difficulty
-5. Motivation
+## 📅 Daily Schedule
 
-Keep the response concise and useful.
+## 🎯 Priority Topics
+
+## 📝 Practice Activities
+
+## 🔄 Revision Strategy
+
+## 🏆 Goal
+
+Keep the plan realistic for a student.
 """
 
-    return ask_ollama(prompt)
+    return ask_ai(prompt)
 
 
-# ============================================================
-# SIMPLE AI RECOMMENDATION
-# ============================================================
+# ==========================================================
+# LEARNING RECOMMENDATION
+# ==========================================================
 
-def get_learning_recommendation(
-    score,
-    weak_topics
+def generate_learning_recommendation(
+    weak_topics,
+    score=0
 ):
 
-    return generate_learning_recommendation(
-        score,
-        weak_topics
-    )
+    if weak_topics:
+
+        topics_text = ", ".join(
+            weak_topics
+        )
+
+    else:
+
+        topics_text = "No weak topics recorded."
+
+    prompt = f"""
+You are an AI learning advisor.
+
+Student latest quiz score:
+{score}%
+
+Weak concepts:
+{topics_text}
+
+Provide personalized recommendations.
+
+Include:
+
+1. What the student is doing well.
+2. What needs improvement.
+3. Which topics to study first.
+4. Recommended practice activities.
+5. A short motivation message.
+
+Keep the response concise.
+"""
+
+    return ask_ai(prompt)
+
+
+# ==========================================================
+# AI MODE
+# ==========================================================
+
+def get_ai_mode():
+
+    if gemini_available():
+
+        return "☁️ Gemini AI"
+
+    return "💻 Ollama Local AI"
+
+
+# ==========================================================
+# AI STATUS
+# ==========================================================
+
+def get_ai_status():
+
+    if gemini_available():
+
+        return {
+
+            "mode": "Gemini",
+
+            "model": GEMINI_MODEL,
+
+            "status": "Connected"
+        }
+
+    return {
+
+        "mode": "Ollama",
+
+        "model": OLLAMA_MODEL,
+
+        "status": "Local mode"
+    }

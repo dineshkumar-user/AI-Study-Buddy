@@ -1,21 +1,21 @@
 # ==========================================================
-# AI ENGINE
-# AI Study Buddy
+# 🎓 AI STUDY BUDDY - AI ENGINE
 #
-# CLOUD:
-#     Google Gemini API
+# CLOUD AI:
+#   Google Gemini
 #
-# LOCAL:
-#     Ollama + Llama 3.2 3B
+# LOCAL AI:
+#   Ollama + Llama 3.2 3B
 #
-# CLOUD is used when GEMINI_API_KEY is available.
-# Otherwise, local Ollama is used.
+# Priority:
+#   1. Gemini Cloud AI when GEMINI_API_KEY exists
+#   2. Ollama Local AI otherwise
+#
 # ==========================================================
 
 import os
 import json
 import re
-
 
 # ==========================================================
 # GEMINI IMPORT
@@ -33,7 +33,7 @@ except ImportError:
 
 OLLAMA_MODEL = "llama3.2:3b"
 
-# Gemini model for cloud deployment
+# Cloud model
 GEMINI_MODEL = "gemini-2.5-flash"
 
 
@@ -47,7 +47,7 @@ def get_gemini_key():
 
     Priority:
     1. Environment variable
-    2. Streamlit Cloud secrets
+    2. Streamlit secrets
     """
 
     # ------------------------------------------------------
@@ -57,21 +57,17 @@ def get_gemini_key():
     api_key = os.getenv("GEMINI_API_KEY")
 
     if api_key:
-        return api_key.strip()
+        return str(api_key).strip()
 
     # ------------------------------------------------------
     # 2. Streamlit Cloud secrets
     # ------------------------------------------------------
 
     try:
-
         import streamlit as st
 
         try:
-
-            api_key = st.secrets.get(
-                "GEMINI_API_KEY"
-            )
+            api_key = st.secrets.get("GEMINI_API_KEY")
 
             if api_key:
                 return str(api_key).strip()
@@ -90,6 +86,9 @@ def get_gemini_key():
 # ==========================================================
 
 def gemini_available():
+    """
+    Returns True when Gemini can be used.
+    """
 
     api_key = get_gemini_key()
 
@@ -105,6 +104,9 @@ def gemini_available():
 # ==========================================================
 
 def get_gemini_client():
+    """
+    Create Google Gemini client.
+    """
 
     api_key = get_gemini_key()
 
@@ -115,7 +117,6 @@ def get_gemini_client():
         return None
 
     try:
-
         client = genai.Client(
             api_key=api_key
         )
@@ -134,7 +135,9 @@ def ask_ollama(prompt):
     """
     Local AI using Ollama.
 
-    Used when running the project locally.
+    Used when:
+    - Running locally
+    - Gemini API key is not available
     """
 
     try:
@@ -163,7 +166,6 @@ def ask_ollama(prompt):
         )
 
         if answer:
-
             return answer.strip()
 
         return (
@@ -175,7 +177,7 @@ def ask_ollama(prompt):
         return (
             "❌ Local Ollama AI could not be reached.\n\n"
             "If you are running the application locally, "
-            "make sure Ollama is running.\n\n"
+            "make sure Ollama is installed and running.\n\n"
             f"Details: {error}"
         )
 
@@ -210,7 +212,6 @@ def ask_gemini(prompt):
             )
 
             if text:
-
                 return text.strip()
 
         return None
@@ -224,18 +225,18 @@ def ask_gemini(prompt):
 
 
 # ==========================================================
-# UNIVERSAL AI FUNCTION
+# UNIVERSAL AI ROUTER
 # ==========================================================
 
 def ask_ai(prompt):
     """
     Main AI router.
 
-    If Gemini API key exists:
-        Use Gemini Cloud AI.
+    Cloud:
+        Gemini
 
-    Otherwise:
-        Use local Ollama.
+    Local:
+        Ollama
     """
 
     # ======================================================
@@ -267,7 +268,7 @@ def ask_ai(prompt):
         )
 
     # ======================================================
-    # LOCAL OLLAMA
+    # OLLAMA LOCAL
     # ======================================================
 
     return ask_ollama(prompt)
@@ -278,11 +279,14 @@ def ask_ai(prompt):
 # ==========================================================
 
 def clean_json_response(text):
+    """
+    Clean AI response and convert it into JSON.
+    """
 
     if not text:
         return None
 
-    text = text.strip()
+    text = str(text).strip()
 
     # ------------------------------------------------------
     # Remove markdown code blocks
@@ -317,8 +321,7 @@ def clean_json_response(text):
     ):
 
         text = text[
-            start:
-            end + 1
+            start:end + 1
         ]
 
     else:
@@ -337,8 +340,7 @@ def clean_json_response(text):
         ):
 
             text = text[
-                start:
-                end + 1
+                start:end + 1
             ]
 
     # ------------------------------------------------------
@@ -432,8 +434,8 @@ Instructions:
 - Stay relevant to the study material.
 - Give an example when useful.
 - If the answer is not present in the notes,
-  clearly say that it is not available in the
-  provided study material.
+  clearly say that it is not available in
+  the provided study material.
 """
 
     return ask_ai(prompt)
@@ -567,8 +569,8 @@ Rules:
 1. Exactly {number} questions.
 2. Exactly four options per question.
 3. Only one correct answer.
-4. The answer must exactly match
-   one of the options.
+4. The answer must exactly match one
+   of the options.
 5. Questions must be based on the
    study material.
 6. Avoid duplicate questions.
@@ -590,7 +592,6 @@ Rules:
         quiz,
         list
     ):
-
         return []
 
     valid_questions = []
@@ -601,7 +602,6 @@ Rules:
             item,
             dict
         ):
-
             continue
 
         question = item.get(
@@ -648,7 +648,10 @@ Rules:
         if not answer:
             continue
 
-        # Convert everything to strings
+        # --------------------------------------------------
+        # Convert to strings
+        # --------------------------------------------------
+
         options = [
             str(option).strip()
             for option in options
@@ -697,7 +700,7 @@ Rules:
 
         valid_questions.append(
             {
-                "question": question,
+                "question": str(question),
                 "options": options,
                 "answer": answer,
                 "concept": str(concept),
@@ -775,7 +778,6 @@ Rules:
         cards,
         list
     ):
-
         return []
 
     valid_cards = []
@@ -786,7 +788,6 @@ Rules:
             card,
             dict
         ):
-
             continue
 
         question = card.get(
@@ -950,3 +951,8 @@ def get_ai_status():
         "model": OLLAMA_MODEL,
         "status": "Local mode"
     }
+
+
+# ==========================================================
+# END OF AI ENGINE
+# ==========================================================

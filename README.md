@@ -1,4 +1,4 @@
-# AI Study Buddy
+# AI Study Buddy Live Demo 🔗https://ai-study-buddy-dinesh.streamlit.app/
 
 AI Study Buddy is an AI-powered personal learning assistant built with Python and Streamlit. The application helps students study more effectively by providing AI-based explanations, question answering, summaries, quizzes, flashcards, personalized study plans, weak concept detection, progress tracking, and study reports.
 

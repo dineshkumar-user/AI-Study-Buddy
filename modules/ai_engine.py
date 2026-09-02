@@ -2,21 +2,30 @@
 # AI ENGINE
 # AI Study Buddy
 #
-# LOCAL:
-#     Ollama + Llama 3.2
-#
 # CLOUD:
 #     Google Gemini API
 #
-# GEMINI STRATEGY:
-#     1. Gemini 3.6 Flash
-#     2. Retry temporary errors
-#     3. Gemini 3.5 Flash-Lite fallback
+# LOCAL:
+#     Ollama + Llama 3.2 3B
 #
-# IMPORTANT:
-#     Gemini is used when GEMINI_API_KEY is available.
-#     Ollama is used only when Gemini is not configured.
+# AI ROUTING:
+#     1. Gemini 3.5 Flash-Lite
+#     2. Gemini 3.6 Flash
+#     3. Ollama Local AI
+#
+# Features:
+#     - AI Chat
+#     - Concept Explainer
+#     - Smart Summary
+#     - AI Quiz
+#     - Flashcards
+#     - Study Plan
+#     - Learning Recommendations
+#     - Automatic Gemini retry
+#     - Gemini fallback
+#     - Ollama fallback
 # ==========================================================
+
 
 import os
 import json
@@ -41,18 +50,16 @@ except ImportError:
 OLLAMA_MODEL = "llama3.2:3b"
 
 # Primary Gemini model
-GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_PRIMARY_MODEL = "gemini-3.5-flash-lite"
 
-# Backup Gemini model
-GEMINI_FALLBACK_MODEL = "gemini-3.5-flash-lite"
+# First Gemini fallback
+GEMINI_FALLBACK_MODEL = "gemini-3.6-flash"
 
-# Number of attempts for each model
-GEMINI_RETRY_ATTEMPTS = 3
+# Number of attempts for each Gemini model
+GEMINI_RETRY_ATTEMPTS = 2
 
-# Delay between retries
-# Attempt 1 -> wait 3 seconds
-# Attempt 2 -> wait 8 seconds
-GEMINI_RETRY_DELAYS = [3, 8]
+# Delay between retry attempts
+GEMINI_RETRY_DELAY = 4
 
 
 # ==========================================================
@@ -77,24 +84,33 @@ def get_gemini_key():
     if api_key:
         return api_key.strip()
 
+
     # ------------------------------------------------------
-    # 2. Streamlit secrets
+    # 2. Streamlit Cloud secrets
     # ------------------------------------------------------
 
     try:
+
         import streamlit as st
 
         try:
-            api_key = st.secrets.get("GEMINI_API_KEY")
+
+            api_key = st.secrets.get(
+                "GEMINI_API_KEY"
+            )
 
             if api_key:
+
                 return str(api_key).strip()
 
         except Exception:
+
             pass
 
     except Exception:
+
         pass
+
 
     return None
 
@@ -152,16 +168,6 @@ def get_gemini_client():
 # ==========================================================
 
 def is_retryable_gemini_error(error):
-    """
-    Returns True for temporary Gemini errors.
-
-    These errors can often succeed when retried:
-    - 503 UNAVAILABLE
-    - 429 RESOURCE_EXHAUSTED
-    - 500
-    - 502
-    - 504
-    """
 
     error_text = str(error).upper()
 
@@ -182,7 +188,7 @@ def is_retryable_gemini_error(error):
 
 
 # ==========================================================
-# GEMINI REQUEST
+# GENERATE GEMINI RESPONSE
 # ==========================================================
 
 def generate_gemini_response(
@@ -191,10 +197,22 @@ def generate_gemini_response(
     prompt
 ):
     """
-    Send request to Gemini with automatic retries.
+    Generate response from Gemini.
 
     Returns:
-        (response_text, error_text, retryable)
+
+        {
+            "success": True,
+            "text": response
+        }
+
+    OR
+
+        {
+            "success": False,
+            "error": error,
+            "retryable": True/False
+        }
     """
 
     last_error = None
@@ -206,9 +224,16 @@ def generate_gemini_response(
         try:
 
             response = client.models.generate_content(
+
                 model=model,
+
                 contents=prompt
             )
+
+
+            # --------------------------------------------------
+            # Check response
+            # --------------------------------------------------
 
             if response is not None:
 
@@ -220,63 +245,60 @@ def generate_gemini_response(
 
                 if text:
 
-                    return (
-                        text.strip(),
-                        None,
-                        False
-                    )
+                    return {
+                        "success": True,
+                        "text": text.strip()
+                    }
+
 
             last_error = (
                 "Gemini returned an empty response."
             )
 
+
         except Exception as error:
 
             last_error = str(error)
 
-            # ------------------------------------------
-            # Retry only temporary errors
-            # ------------------------------------------
 
-            if is_retryable_gemini_error(
-                error
-            ):
+            # --------------------------------------------------
+            # Retry temporary errors
+            # --------------------------------------------------
 
-                # Do not sleep after final attempt
+            if is_retryable_gemini_error(error):
+
                 if attempt < GEMINI_RETRY_ATTEMPTS - 1:
 
-                    delay = GEMINI_RETRY_DELAYS[
-                        min(
-                            attempt,
-                            len(GEMINI_RETRY_DELAYS) - 1
-                        )
-                    ]
-
-                    time.sleep(delay)
+                    time.sleep(
+                        GEMINI_RETRY_DELAY
+                    )
 
                     continue
 
-                return (
-                    None,
-                    last_error,
-                    True
-                )
 
-            # ------------------------------------------
-            # Permanent error
-            # ------------------------------------------
+                return {
+                    "success": False,
+                    "error": last_error,
+                    "retryable": True
+                }
 
-            return (
-                None,
-                last_error,
-                False
-            )
 
-    return (
-        None,
-        last_error,
-        False
-    )
+            # --------------------------------------------------
+            # Non-retryable error
+            # --------------------------------------------------
+
+            return {
+                "success": False,
+                "error": last_error,
+                "retryable": False
+            }
+
+
+    return {
+        "success": False,
+        "error": last_error,
+        "retryable": False
+    }
 
 
 # ==========================================================
@@ -287,48 +309,71 @@ def ask_ollama(prompt):
     """
     Local AI using Ollama.
 
-    This function is intended for local development.
+    Used for local development or
+    as a final fallback.
     """
 
     try:
 
         import requests
 
+
         response = requests.post(
+
             "http://localhost:11434/api/generate",
 
             json={
+
                 "model": OLLAMA_MODEL,
+
                 "prompt": prompt,
+
                 "stream": False
             },
 
             timeout=180
         )
 
+
         response.raise_for_status()
 
+
         data = response.json()
+
 
         answer = data.get(
             "response",
             ""
         )
 
+
         if answer:
 
             return answer.strip()
+
 
         return (
             "❌ Ollama returned an empty response."
         )
 
-    except Exception:
+
+    except requests.exceptions.ConnectionError:
 
         return (
             "❌ Local Ollama AI could not be reached.\n\n"
-            "If you are running the application locally, "
-            "make sure Ollama is running."
+
+            "Ollama is not running on this server.\n\n"
+
+            "Please try again when Gemini becomes "
+            "available."
+        )
+
+
+    except Exception as error:
+
+        return (
+            "❌ Local Ollama AI could not be reached.\n\n"
+            f"Error: {error}"
         )
 
 
@@ -340,17 +385,19 @@ def ask_gemini(prompt):
     """
     Cloud AI using Google Gemini.
 
-    Primary:
-        Gemini 3.6 Flash
+    Routing:
 
-    Fallback:
         Gemini 3.5 Flash-Lite
+                ↓
+        Gemini 3.6 Flash
+                ↓
+        return error
 
-    Temporary errors such as 503 are retried
-    automatically.
+    Ollama fallback is handled by ask_ai().
     """
 
     client = get_gemini_client()
+
 
     if client is None:
 
@@ -359,65 +406,71 @@ def ask_gemini(prompt):
             "Gemini client could not be created."
         )
 
+
     # ======================================================
-    # STEP 1 - PRIMARY MODEL
+    # PRIMARY MODEL
     # ======================================================
 
-    response_text, error_text, retryable = (
-        generate_gemini_response(
-            client,
-            GEMINI_MODEL,
-            prompt
-        )
+    primary_result = generate_gemini_response(
+
+        client,
+
+        GEMINI_PRIMARY_MODEL,
+
+        prompt
     )
 
-    if response_text:
 
-        return response_text
+    if primary_result["success"]:
 
-    # ======================================================
-    # STEP 2 - FALLBACK MODEL
-    # ======================================================
+        return primary_result["text"]
 
-    if retryable:
 
-        response_text, fallback_error, fallback_retryable = (
-            generate_gemini_response(
-                client,
-                GEMINI_FALLBACK_MODEL,
-                prompt
-            )
-        )
+    primary_error = primary_result["error"]
 
-        if response_text:
-
-            return response_text
-
-        if fallback_error:
-
-            return (
-                "GEMINI_ERROR:"
-                "Primary model "
-                f"({GEMINI_MODEL}) was temporarily unavailable.\n\n"
-                "Fallback model "
-                f"({GEMINI_FALLBACK_MODEL}) also failed.\n\n"
-                f"{fallback_error}"
-            )
 
     # ======================================================
-    # STEP 3 - NON-RETRYABLE ERROR
+    # FALLBACK MODEL
     # ======================================================
 
-    if error_text:
+    fallback_result = generate_gemini_response(
 
-        return (
-            "GEMINI_ERROR:"
-            + error_text
-        )
+        client,
+
+        GEMINI_FALLBACK_MODEL,
+
+        prompt
+    )
+
+
+    if fallback_result["success"]:
+
+        return fallback_result["text"]
+
+
+    fallback_error = fallback_result["error"]
+
+
+    # ======================================================
+    # BOTH GEMINI MODELS FAILED
+    # ======================================================
 
     return (
-        "GEMINI_ERROR:"
-        "Gemini returned no response."
+        "GEMINI_ERROR:\n\n"
+
+        "Primary model "
+        f"({GEMINI_PRIMARY_MODEL}) "
+        "was temporarily unavailable.\n\n"
+
+        "Fallback model "
+        f"({GEMINI_FALLBACK_MODEL}) "
+        "also failed.\n\n"
+
+        "Primary error:\n"
+        f"{primary_error}\n\n"
+
+        "Fallback error:\n"
+        f"{fallback_error}"
     )
 
 
@@ -430,13 +483,16 @@ def ask_ai(prompt):
     Main AI router.
 
     CLOUD:
-        Gemini API
 
-    LOCAL:
+        Gemini 3.5 Flash-Lite
+                ↓
+        Gemini 3.6 Flash
+                ↓
         Ollama
 
-    Gemini is always preferred when the API key
-    is configured.
+    LOCAL:
+
+        Ollama
     """
 
     # ======================================================
@@ -447,32 +503,66 @@ def ask_ai(prompt):
 
         response = ask_gemini(prompt)
 
+
+        # --------------------------------------------------
+        # Gemini succeeded
+        # --------------------------------------------------
+
         if response:
 
-            # ------------------------------------------
-            # Gemini error
-            # ------------------------------------------
-
-            if response.startswith(
+            if not response.startswith(
                 "GEMINI_ERROR:"
             ):
 
-                error_message = response.replace(
-                    "GEMINI_ERROR:",
-                    "",
-                    1
-                ).strip()
+                return response
 
-                return (
-                    "❌ Gemini AI Error\n\n"
-                    + error_message
-                )
 
-            return response
+            # ------------------------------------------------
+            # Gemini failed
+            # Try Ollama as final fallback
+            # ------------------------------------------------
+
+            ollama_response = ask_ollama(
+                prompt
+            )
+
+
+            # ------------------------------------------------
+            # Ollama succeeded
+            # ------------------------------------------------
+
+            if (
+                ollama_response
+                and not ollama_response.startswith("❌")
+            ):
+
+                return ollama_response
+
+
+            # ------------------------------------------------
+            # Ollama unavailable too
+            # ------------------------------------------------
+
+            gemini_error = response.replace(
+                "GEMINI_ERROR:",
+                ""
+            ).strip()
+
+
+            return (
+                "❌ Gemini AI Error\n\n"
+                + gemini_error
+                + "\n\n"
+                "⚠️ Local Ollama fallback is also "
+                "unavailable on the cloud server.\n\n"
+                "Please try again after a short while."
+            )
+
 
         return (
             "❌ Gemini returned no response."
         )
+
 
     # ======================================================
     # LOCAL OLLAMA
@@ -488,35 +578,50 @@ def ask_ai(prompt):
 def clean_json_response(text):
 
     if not text:
+
         return None
 
+
     text = text.strip()
+
 
     # ------------------------------------------------------
     # Remove markdown code blocks
     # ------------------------------------------------------
 
     text = re.sub(
+
         r"```json",
+
         "",
+
         text,
+
         flags=re.IGNORECASE
     )
 
+
     text = re.sub(
+
         r"```",
+
         "",
+
         text
     )
 
+
     text = text.strip()
+
 
     # ------------------------------------------------------
     # Find JSON array
     # ------------------------------------------------------
 
     start = text.find("[")
+
     end = text.rfind("]")
+
 
     if (
         start != -1
@@ -529,6 +634,7 @@ def clean_json_response(text):
             end + 1
         ]
 
+
     else:
 
         # --------------------------------------------------
@@ -536,7 +642,9 @@ def clean_json_response(text):
         # --------------------------------------------------
 
         start = text.find("{")
+
         end = text.rfind("}")
+
 
         if (
             start != -1
@@ -548,6 +656,7 @@ def clean_json_response(text):
                 start:
                 end + 1
             ]
+
 
     # ------------------------------------------------------
     # Parse JSON
@@ -662,9 +771,11 @@ def generate_ai_summary(
             "Please provide study material first."
         )
 
+
     if summary_type == "Bullet Points":
 
         format_instruction = """
+
 Create a bullet-point summary.
 
 Include:
@@ -673,16 +784,21 @@ Include:
 • Important definitions
 • Key facts
 • Important examples
+
 """
+
 
     else:
 
         format_instruction = """
+
 Create a clear paragraph summary.
 
 Keep it concise while including the
 important concepts.
+
 """
+
 
     prompt = f"""
 You are an AI Study Buddy.
@@ -727,12 +843,15 @@ def generate_quiz(
 ):
 
     if not notes.strip():
+
         return []
+
 
     number = max(
         3,
         min(number, 10)
     )
+
 
     prompt = f"""
 You are an AI quiz generator.
@@ -785,11 +904,26 @@ Rules:
    A., B., C., D. outside the option text.
 """
 
+
     response = ask_ai(prompt)
+
+
+    # ------------------------------------------------------
+    # Check AI error
+    # ------------------------------------------------------
+
+    if (
+        not response
+        or response.startswith("❌")
+    ):
+
+        return []
+
 
     quiz = clean_json_response(
         response
     )
+
 
     if not isinstance(
         quiz,
@@ -798,7 +932,9 @@ Rules:
 
         return []
 
+
     valid_questions = []
+
 
     for item in quiz:
 
@@ -809,37 +945,45 @@ Rules:
 
             continue
 
+
         question = item.get(
             "question",
             ""
         )
+
 
         options = item.get(
             "options",
             []
         )
 
+
         answer = item.get(
             "answer",
             ""
         )
+
 
         concept = item.get(
             "concept",
             "General"
         )
 
+
         explanation = item.get(
             "explanation",
             ""
         )
+
 
         # --------------------------------------------------
         # Validate question
         # --------------------------------------------------
 
         if not question:
+
             continue
+
 
         if not isinstance(
             options,
@@ -848,11 +992,16 @@ Rules:
 
             continue
 
+
         if len(options) != 4:
+
             continue
 
+
         if not answer:
+
             continue
+
 
         # --------------------------------------------------
         # Match answer with option
@@ -862,19 +1011,28 @@ Rules:
 
             matched_answer = None
 
+
             clean_answer = re.sub(
+
                 r"^[A-Da-d][\.\)\:\-]\s*",
+
                 "",
+
                 str(answer)
             ).strip()
+
 
             for option in options:
 
                 clean_option = re.sub(
+
                     r"^[A-Da-d][\.\)\:\-]\s*",
+
                     "",
+
                     str(option)
                 ).strip()
+
 
                 if (
                     clean_option.lower()
@@ -886,6 +1044,7 @@ Rules:
 
                     break
 
+
             if matched_answer:
 
                 answer = matched_answer
@@ -894,15 +1053,22 @@ Rules:
 
                 continue
 
+
         valid_questions.append(
+
             {
                 "question": question,
+
                 "options": options,
+
                 "answer": answer,
+
                 "concept": concept,
+
                 "explanation": explanation
             }
         )
+
 
     return valid_questions[:number]
 
@@ -917,12 +1083,15 @@ def generate_flashcards(
 ):
 
     if not notes.strip():
+
         return []
+
 
     number = max(
         3,
         min(number, 15)
     )
+
 
     prompt = f"""
 You are an AI flashcard generator.
@@ -964,11 +1133,22 @@ Rules:
    by the study material.
 """
 
+
     response = ask_ai(prompt)
+
+
+    if (
+        not response
+        or response.startswith("❌")
+    ):
+
+        return []
+
 
     cards = clean_json_response(
         response
     )
+
 
     if not isinstance(
         cards,
@@ -977,7 +1157,9 @@ Rules:
 
         return []
 
+
     valid_cards = []
+
 
     for card in cards:
 
@@ -988,30 +1170,38 @@ Rules:
 
             continue
 
+
         question = card.get(
             "question",
             ""
         )
+
 
         answer = card.get(
             "answer",
             ""
         )
 
+
         concept = card.get(
             "concept",
             "General"
         )
 
+
         if question and answer:
 
             valid_cards.append(
+
                 {
                     "question": question,
+
                     "answer": answer,
+
                     "concept": concept
                 }
             )
+
 
     return valid_cards[:number]
 
@@ -1031,10 +1221,14 @@ def generate_study_plan(
             "General revision"
         ]
 
+
     topics_text = "\n".join(
+
         f"- {topic}"
+
         for topic in weak_topics
     )
+
 
     prompt = f"""
 You are an AI personal study planner.
@@ -1066,6 +1260,7 @@ Include:
 Keep the plan realistic for a student.
 """
 
+
     return ask_ai(prompt)
 
 
@@ -1090,6 +1285,7 @@ def generate_learning_recommendation(
             "No weak topics recorded."
         )
 
+
     prompt = f"""
 You are an AI learning advisor.
 
@@ -1113,6 +1309,7 @@ Include:
 
 Keep the response concise.
 """
+
 
     return ask_ai(prompt)
 
@@ -1139,13 +1336,20 @@ def get_ai_status():
     if gemini_available():
 
         return {
+
             "mode": "Gemini",
-            "model": GEMINI_MODEL,
+
+            "model": GEMINI_PRIMARY_MODEL,
+
             "status": "Connected"
         }
 
+
     return {
+
         "mode": "Ollama",
+
         "model": OLLAMA_MODEL,
+
         "status": "Local mode"
     }

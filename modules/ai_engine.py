@@ -1,24 +1,31 @@
 # ==========================================================
-# 🎓 AI STUDY BUDDY - AI ENGINE
+# AI ENGINE
+# AI Study Buddy
 #
-# CLOUD AI:
-#   Google Gemini
+# LOCAL:
+#     Ollama + Llama 3.2
 #
-# LOCAL AI:
-#   Ollama + Llama 3.2 3B
+# CLOUD:
+#     Google Gemini API
 #
-# Priority:
-#   1. Gemini Cloud AI when GEMINI_API_KEY exists
-#   2. Ollama Local AI otherwise
+# GEMINI STRATEGY:
+#     1. Gemini 3.6 Flash
+#     2. Retry temporary errors
+#     3. Gemini 3.5 Flash-Lite fallback
 #
+# IMPORTANT:
+#     Gemini is used when GEMINI_API_KEY is available.
+#     Ollama is used only when Gemini is not configured.
 # ==========================================================
 
 import os
 import json
 import re
+import time
+
 
 # ==========================================================
-# GEMINI IMPORT
+# OPTIONAL GEMINI IMPORT
 # ==========================================================
 
 try:
@@ -33,8 +40,19 @@ except ImportError:
 
 OLLAMA_MODEL = "llama3.2:3b"
 
-# Cloud model
+# Primary Gemini model
 GEMINI_MODEL = "gemini-3.6-flash"
+
+# Backup Gemini model
+GEMINI_FALLBACK_MODEL = "gemini-3.5-flash-lite"
+
+# Number of attempts for each model
+GEMINI_RETRY_ATTEMPTS = 3
+
+# Delay between retries
+# Attempt 1 -> wait 3 seconds
+# Attempt 2 -> wait 8 seconds
+GEMINI_RETRY_DELAYS = [3, 8]
 
 
 # ==========================================================
@@ -47,7 +65,7 @@ def get_gemini_key():
 
     Priority:
     1. Environment variable
-    2. Streamlit secrets
+    2. Streamlit Cloud secrets
     """
 
     # ------------------------------------------------------
@@ -57,10 +75,10 @@ def get_gemini_key():
     api_key = os.getenv("GEMINI_API_KEY")
 
     if api_key:
-        return str(api_key).strip()
+        return api_key.strip()
 
     # ------------------------------------------------------
-    # 2. Streamlit Cloud secrets
+    # 2. Streamlit secrets
     # ------------------------------------------------------
 
     try:
@@ -87,7 +105,10 @@ def get_gemini_key():
 
 def gemini_available():
     """
-    Returns True when Gemini can be used.
+    Returns True when:
+
+    - google-genai is installed
+    - GEMINI_API_KEY exists
     """
 
     api_key = get_gemini_key()
@@ -104,9 +125,6 @@ def gemini_available():
 # ==========================================================
 
 def get_gemini_client():
-    """
-    Create Google Gemini client.
-    """
 
     api_key = get_gemini_key()
 
@@ -117,6 +135,7 @@ def get_gemini_client():
         return None
 
     try:
+
         client = genai.Client(
             api_key=api_key
         )
@@ -124,20 +143,151 @@ def get_gemini_client():
         return client
 
     except Exception:
+
         return None
 
 
 # ==========================================================
-# LOCAL OLLAMA AI
+# CHECK RETRYABLE GEMINI ERROR
+# ==========================================================
+
+def is_retryable_gemini_error(error):
+    """
+    Returns True for temporary Gemini errors.
+
+    These errors can often succeed when retried:
+    - 503 UNAVAILABLE
+    - 429 RESOURCE_EXHAUSTED
+    - 500
+    - 502
+    - 504
+    """
+
+    error_text = str(error).upper()
+
+    retryable_errors = [
+        "503",
+        "UNAVAILABLE",
+        "429",
+        "RESOURCE_EXHAUSTED",
+        "500",
+        "502",
+        "504"
+    ]
+
+    return any(
+        error_code in error_text
+        for error_code in retryable_errors
+    )
+
+
+# ==========================================================
+# GEMINI REQUEST
+# ==========================================================
+
+def generate_gemini_response(
+    client,
+    model,
+    prompt
+):
+    """
+    Send request to Gemini with automatic retries.
+
+    Returns:
+        (response_text, error_text, retryable)
+    """
+
+    last_error = None
+
+    for attempt in range(
+        GEMINI_RETRY_ATTEMPTS
+    ):
+
+        try:
+
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt
+            )
+
+            if response is not None:
+
+                text = getattr(
+                    response,
+                    "text",
+                    None
+                )
+
+                if text:
+
+                    return (
+                        text.strip(),
+                        None,
+                        False
+                    )
+
+            last_error = (
+                "Gemini returned an empty response."
+            )
+
+        except Exception as error:
+
+            last_error = str(error)
+
+            # ------------------------------------------
+            # Retry only temporary errors
+            # ------------------------------------------
+
+            if is_retryable_gemini_error(
+                error
+            ):
+
+                # Do not sleep after final attempt
+                if attempt < GEMINI_RETRY_ATTEMPTS - 1:
+
+                    delay = GEMINI_RETRY_DELAYS[
+                        min(
+                            attempt,
+                            len(GEMINI_RETRY_DELAYS) - 1
+                        )
+                    ]
+
+                    time.sleep(delay)
+
+                    continue
+
+                return (
+                    None,
+                    last_error,
+                    True
+                )
+
+            # ------------------------------------------
+            # Permanent error
+            # ------------------------------------------
+
+            return (
+                None,
+                last_error,
+                False
+            )
+
+    return (
+        None,
+        last_error,
+        False
+    )
+
+
+# ==========================================================
+# OLLAMA AI
 # ==========================================================
 
 def ask_ollama(prompt):
     """
     Local AI using Ollama.
 
-    Used when:
-    - Running locally
-    - Gemini API key is not available
+    This function is intended for local development.
     """
 
     try:
@@ -166,77 +316,127 @@ def ask_ollama(prompt):
         )
 
         if answer:
+
             return answer.strip()
 
         return (
             "❌ Ollama returned an empty response."
         )
 
-    except Exception as error:
+    except Exception:
 
         return (
             "❌ Local Ollama AI could not be reached.\n\n"
             "If you are running the application locally, "
-            "make sure Ollama is installed and running.\n\n"
-            f"Details: {error}"
+            "make sure Ollama is running."
         )
 
 
 # ==========================================================
-# GEMINI CLOUD AI
+# GEMINI AI
 # ==========================================================
 
 def ask_gemini(prompt):
     """
     Cloud AI using Google Gemini.
+
+    Primary:
+        Gemini 3.6 Flash
+
+    Fallback:
+        Gemini 3.5 Flash-Lite
+
+    Temporary errors such as 503 are retried
+    automatically.
     """
 
     client = get_gemini_client()
 
     if client is None:
-        return None
-
-    try:
-
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
-
-        if response is not None:
-
-            text = getattr(
-                response,
-                "text",
-                None
-            )
-
-            if text:
-                return text.strip()
-
-        return None
-
-    except Exception as error:
 
         return (
             "GEMINI_ERROR:"
-            + str(error)
+            "Gemini client could not be created."
         )
+
+    # ======================================================
+    # STEP 1 - PRIMARY MODEL
+    # ======================================================
+
+    response_text, error_text, retryable = (
+        generate_gemini_response(
+            client,
+            GEMINI_MODEL,
+            prompt
+        )
+    )
+
+    if response_text:
+
+        return response_text
+
+    # ======================================================
+    # STEP 2 - FALLBACK MODEL
+    # ======================================================
+
+    if retryable:
+
+        response_text, fallback_error, fallback_retryable = (
+            generate_gemini_response(
+                client,
+                GEMINI_FALLBACK_MODEL,
+                prompt
+            )
+        )
+
+        if response_text:
+
+            return response_text
+
+        if fallback_error:
+
+            return (
+                "GEMINI_ERROR:"
+                "Primary model "
+                f"({GEMINI_MODEL}) was temporarily unavailable.\n\n"
+                "Fallback model "
+                f"({GEMINI_FALLBACK_MODEL}) also failed.\n\n"
+                f"{fallback_error}"
+            )
+
+    # ======================================================
+    # STEP 3 - NON-RETRYABLE ERROR
+    # ======================================================
+
+    if error_text:
+
+        return (
+            "GEMINI_ERROR:"
+            + error_text
+        )
+
+    return (
+        "GEMINI_ERROR:"
+        "Gemini returned no response."
+    )
 
 
 # ==========================================================
-# UNIVERSAL AI ROUTER
+# UNIVERSAL AI FUNCTION
 # ==========================================================
 
 def ask_ai(prompt):
     """
     Main AI router.
 
-    Cloud:
-        Gemini
+    CLOUD:
+        Gemini API
 
-    Local:
+    LOCAL:
         Ollama
+
+    Gemini is always preferred when the API key
+    is configured.
     """
 
     # ======================================================
@@ -249,16 +449,23 @@ def ask_ai(prompt):
 
         if response:
 
+            # ------------------------------------------
+            # Gemini error
+            # ------------------------------------------
+
             if response.startswith(
                 "GEMINI_ERROR:"
             ):
 
+                error_message = response.replace(
+                    "GEMINI_ERROR:",
+                    "",
+                    1
+                ).strip()
+
                 return (
                     "❌ Gemini AI Error\n\n"
-                    + response.replace(
-                        "GEMINI_ERROR:",
-                        ""
-                    )
+                    + error_message
                 )
 
             return response
@@ -268,7 +475,7 @@ def ask_ai(prompt):
         )
 
     # ======================================================
-    # OLLAMA LOCAL
+    # LOCAL OLLAMA
     # ======================================================
 
     return ask_ollama(prompt)
@@ -279,14 +486,11 @@ def ask_ai(prompt):
 # ==========================================================
 
 def clean_json_response(text):
-    """
-    Clean AI response and convert it into JSON.
-    """
 
     if not text:
         return None
 
-    text = str(text).strip()
+    text = text.strip()
 
     # ------------------------------------------------------
     # Remove markdown code blocks
@@ -321,7 +525,8 @@ def clean_json_response(text):
     ):
 
         text = text[
-            start:end + 1
+            start:
+            end + 1
         ]
 
     else:
@@ -340,7 +545,8 @@ def clean_json_response(text):
         ):
 
             text = text[
-                start:end + 1
+                start:
+                end + 1
             ]
 
     # ------------------------------------------------------
@@ -416,8 +622,8 @@ def chat_with_notes(
     prompt = f"""
 You are an AI Study Buddy.
 
-Answer the student's question using the
-study material provided below.
+Answer the student's question using the study
+material provided below.
 
 STUDY MATERIAL:
 
@@ -434,8 +640,8 @@ Instructions:
 - Stay relevant to the study material.
 - Give an example when useful.
 - If the answer is not present in the notes,
-  clearly say that it is not available in
-  the provided study material.
+  clearly say that it is not available in the
+  provided study material.
 """
 
     return ask_ai(prompt)
@@ -553,10 +759,10 @@ Return exactly this structure:
   {{
     "question": "Question text",
     "options": [
-      "Option A text",
-      "Option B text",
-      "Option C text",
-      "Option D text"
+      "Option A",
+      "Option B",
+      "Option C",
+      "Option D"
     ],
     "answer": "Correct option text",
     "concept": "Main concept",
@@ -569,17 +775,14 @@ Rules:
 1. Exactly {number} questions.
 2. Exactly four options per question.
 3. Only one correct answer.
-4. The answer must exactly match one
-   of the options.
+4. The answer must exactly match
+   one of the options.
 5. Questions must be based on the
    study material.
 6. Avoid duplicate questions.
 7. Make questions educational.
-8. Do not include A., B., C., D.
-   inside the option text.
-9. Do not include "Correct Answer"
-   in the question.
-10. Return pure JSON only.
+8. Do not include labels such as
+   A., B., C., D. outside the option text.
 """
 
     response = ask_ai(prompt)
@@ -592,6 +795,7 @@ Rules:
         quiz,
         list
     ):
+
         return []
 
     valid_questions = []
@@ -602,6 +806,7 @@ Rules:
             item,
             dict
         ):
+
             continue
 
         question = item.get(
@@ -630,7 +835,7 @@ Rules:
         )
 
         # --------------------------------------------------
-        # Validate
+        # Validate question
         # --------------------------------------------------
 
         if not question:
@@ -640,6 +845,7 @@ Rules:
             options,
             list
         ):
+
             continue
 
         if len(options) != 4:
@@ -647,17 +853,6 @@ Rules:
 
         if not answer:
             continue
-
-        # --------------------------------------------------
-        # Convert to strings
-        # --------------------------------------------------
-
-        options = [
-            str(option).strip()
-            for option in options
-        ]
-
-        answer = str(answer).strip()
 
         # --------------------------------------------------
         # Match answer with option
@@ -670,7 +865,7 @@ Rules:
             clean_answer = re.sub(
                 r"^[A-Da-d][\.\)\:\-]\s*",
                 "",
-                answer
+                str(answer)
             ).strip()
 
             for option in options:
@@ -678,7 +873,7 @@ Rules:
                 clean_option = re.sub(
                     r"^[A-Da-d][\.\)\:\-]\s*",
                     "",
-                    option
+                    str(option)
                 ).strip()
 
                 if (
@@ -688,6 +883,7 @@ Rules:
                 ):
 
                     matched_answer = option
+
                     break
 
             if matched_answer:
@@ -700,11 +896,11 @@ Rules:
 
         valid_questions.append(
             {
-                "question": str(question),
+                "question": question,
                 "options": options,
                 "answer": answer,
-                "concept": str(concept),
-                "explanation": str(explanation)
+                "concept": concept,
+                "explanation": explanation
             }
         )
 
@@ -778,6 +974,7 @@ Rules:
         cards,
         list
     ):
+
         return []
 
     valid_cards = []
@@ -788,6 +985,7 @@ Rules:
             card,
             dict
         ):
+
             continue
 
         question = card.get(
@@ -809,9 +1007,9 @@ Rules:
 
             valid_cards.append(
                 {
-                    "question": str(question),
-                    "answer": str(answer),
-                    "concept": str(concept)
+                    "question": question,
+                    "answer": answer,
+                    "concept": concept
                 }
             )
 
@@ -819,7 +1017,7 @@ Rules:
 
 
 # ==========================================================
-# AI STUDY PLAN
+# STUDY PLAN
 # ==========================================================
 
 def generate_study_plan(
@@ -872,7 +1070,7 @@ Keep the plan realistic for a student.
 
 
 # ==========================================================
-# AI LEARNING RECOMMENDATION
+# LEARNING RECOMMENDATION
 # ==========================================================
 
 def generate_learning_recommendation(
@@ -951,8 +1149,3 @@ def get_ai_status():
         "model": OLLAMA_MODEL,
         "status": "Local mode"
     }
-
-
-# ==========================================================
-# END OF AI ENGINE
-# ==========================================================

@@ -40,6 +40,17 @@
                 "Data Types in Python",
                 "Python Indentation"
             ]
+        },
+        {
+            "date": "02 September 2026 11:27 AM",
+            "correct": 2,
+            "total": 5,
+            "percentage": 40.0,
+            "weak_topics": [
+                "Input/Output Function S",
+                "Introduction to Python",
+                "Language Features"
+            ]
         }
     ],
     "bookmarks": [
